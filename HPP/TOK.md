@@ -608,3 +608,163 @@
 
 
 以上使数据特征的简单标注，由于特征繁多，建议先可视化各个特征与目标的关系，然后选取明显特征作为分析对象
+
+
+
+## task-2 特征——标签关系可视化
+
+
+
+### 单个特征——标签可视化
+
+
+
+# code
+
+* 引入包
+
+```python
+import numpy as np 
+import pandas as pd 
+import os
+import seaborn as sns
+import matplotlib.pyplot as plt
+from pathlib import Path
+import zipfile
+```
+
+* 打印工作区路径
+
+```python
+for dirname, _, filenames in os.walk('/kaggle/input'):
+    for filename in filenames:
+        print(os.path.join(dirname, filename))
+```
+
+* 读取训练集数据
+
+```python
+data = pd.read_csv("/kaggle/input/house-prices-advanced-regression-techniques/train.csv")
+np.random.seed(10)    # 用来保证结果的复现性
+```
+
+* 可视化分析每一列中属性的数量
+
+```python
+def visualColAttrNum(data, fileName="_"):
+	# data 读取的训练数据
+	# 获取当前工作路径
+	pwd = os.getcwd()
+	# 判读是否已存在目标文件夹
+    if not os.path.exists(pwd+"/"+fileName):
+        os.mkdir(pwd+"/"+fileName)
+    fileDir = pwd+"/"+fileName
+    # 遍历列
+    for col in data.columns:
+        if set(data[col]).__len__() < 20:
+            img = sns.catplot(x=col, kind="count", palette="ch:.25", data=data)
+            img.savefig(fileDir+"/"+col+".png")
+	# 由于kaggle中对文件图片的查看不友好，所以下面将图片打包方便下载查看
+    img_root = Path(fileDir)
+    zipName = fileDir.split("/")[-1] + ".zip"
+    with zipfile.ZipFile(zipName, "w") as z:
+        for img_name in img_root.iterdir():
+            z.write(img_name)
+	# 删除除.zip外的文件
+	shutil.rmtree(fileDir)
+```
+
+* 可视化分析每一列中属性对应的房价的分布
+
+```python
+def visualF2L(data, DirName="_"):    # 可视化特征与标签的关系
+    for col in data.columns:
+        if set(data[col]).__len__() < 20:        
+            fig,axes=plt.subplots(1,2)            
+            sns.stripplot(x=col, y="SalePrice", data=data, ax=axes[0])
+            plt.subplots_adjust(wspace=0.2)
+            sns.barplot(x=col, y="SalePrice", data=data, ax=axes[1])
+            fig.set_figwidth(15)#这个是设置整个图（画布）的大小
+            plt.savefig(DirName+"/"+col+".png")
+            
+            # 由于kaggle中对文件图片的查看不友好，所以下面将图片打包方便下载查看
+            img_root = Path(DirName)
+            zipName = DirName.split("/")[-1] + ".zip"
+            with zipfile.ZipFile(zipName, "w") as z:
+                for img_name in img_root.iterdir():
+                    z.write(img_name)
+            # 删除除.zip外的文件
+            shutil.rmtree(DirName)
+```
+
+* 字符串属性编码
+
+```python
+def encode(data):
+    # 用来存放编码键值对, key为编码对象, value为编码值
+	EncodeMapping = {}
+    for col in data.columns:
+        # 如果属于数字型, 即为 data.describe().columns 直接下一次循环
+        if col in ['Id', 'MSSubClass', 'LotFrontage', 'LotArea', 'OverallQual',
+           'OverallCond', 'YearBuilt', 'YearRemodAdd', 'MasVnrArea', 'BsmtFinSF1',
+           'BsmtFinSF2', 'BsmtUnfSF', 'TotalBsmtSF', '1stFlrSF', '2ndFlrSF',
+           'LowQualFinSF', 'GrLivArea', 'BsmtFullBath', 'BsmtHalfBath', 'FullBath',
+           'HalfBath', 'BedroomAbvGr', 'KitchenAbvGr', 'TotRmsAbvGrd',
+           'Fireplaces', 'GarageYrBlt', 'GarageCars', 'GarageArea', 'WoodDeckSF',
+           'OpenPorchSF', 'EnclosedPorch', '3SsnPorch', 'ScreenPorch', 'PoolArea',
+           'MiscVal', 'MoSold', 'YrSold', 'SalePrice']:
+            continue
+        EncodeMapping[col] = {} 
+        # 用来算平均值
+        mappingsList = {}
+        # 用来存编码对
+        mappingsEncode = {}
+        
+        for key in set(data[col]):
+            # 为了防止np.nan
+            if isinstance(key, str):
+                mappingsList[key] = []
+                mappingsEncode[key] = 0
+        # 记录每个属性对应的房价
+        for val in zip(data[col], data["SalePrice"]):
+            if isinstance(val[0], str):
+                mappingsList[val[0]].append(val[1])
+        ls = []    # 用来存放均值
+        for key in mappingsList:
+            mappingsList[key].append(np.mean(mappingsList[key]))
+            ls.append(np.mean(mappingsList[key]))
+        minVal = min(ls)
+        # 获取编码对
+        for key in mappingsEncode:
+            mappingsEncode[key] = mappingsList[key][-1] / minVal
+        # encode, 更新data
+        for key in mappingsEncode:
+            data[col] = data[col].replace(key, mappingsEncode[key])
+        # 保存encode mapping, 保存映射关系
+        for key in mappingsEncode:
+            EncodeMapping[col][key] = mappingsEncode[key] 
+    
+    return EncodeMapping, data
+```
+
+* 替换np.nan
+
+```python
+data.replace(np.nan, 0)
+```
+
+
+
+* 存储数据
+
+```python
+def saveData(data, fileName):
+	if fileName.split(".")[-1] == "csv":
+		data.to_csv(fileName)
+		
+	if fileName.split(".")[-1] == "npy":
+		np.save(fileName, data)
+```
+
+
+
